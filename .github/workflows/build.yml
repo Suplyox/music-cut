@@ -1,4 +1,4 @@
-name: APK derle
+name: APK creator
 
 on:
   push:
@@ -11,9 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Zip'i aç
-        run: unzip -q muzik-kirp.zip
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -23,11 +20,11 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Debug APK derle
-        run: cd muzik-kirp && gradle assembleDebug --no-daemon
+      - name: Debug APK creator
+        run: gradle assembleDebug --no-daemon
 
-      - name: APK'yı yükle
+      - name: APK downlaod
         uses: actions/upload-artifact@v4
         with:
-          name: muzik-kirp-apk
-          path: muzik-kirp/app/build/outputs/apk/debug/app-debug.apk
+          name: music-cut-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
