@@ -13,13 +13,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
 
-/**
- * Herhangi bir ses dosyasının [startUs, endUs) aralığını kırpıp AAC (.m4a) olarak yazar.
- *
- * Yöntem iki aşamalıdır ve yalnızca Android'in yerleşik codec'lerini kullanır:
- *  1) Seçilen aralık çözülür (decode) ve geçici bir PCM dosyasına yazılır.
- *  2) PCM, AAC olarak kodlanıp MP4/M4A kapsayıcısına yazılır.
- */
+
 object AudioTrimmer {
 
     private const val TIMEOUT_US = 10_000L
@@ -27,19 +21,24 @@ object AudioTrimmer {
 
     private class PcmInfo(val sampleRate: Int, val channels: Int, val bytes: Long)
 
-    /** Başarılıysa true döner. [output] yazılabilir ve aranabilir (seekable) bir dosya tanıtıcısı olmalıdır. */
+    
     fun trim(
         context: Context,
         input: Uri,
         startUs: Long,
         endUs: Long,
-        output: FileDescriptor
+        output: FileDescriptor,
+        bitrate: Int = BITRATE,
+        onProgress: (Int) -> Unit = {}
     ): Boolean {
+        require(startUs >= 0 && endUs > startUs)
+        require(bitrate in setOf(128_000, 192_000, 256_000))
         val tmp = File.createTempFile("pcm", ".raw", context.cacheDir)
         return try {
-            val info = decodeToPcm(context, input, startUs, endUs, tmp) ?: return false
+            val info = decodeToPcm(context, input, startUs, endUs, tmp, onProgress) ?: return false
             if (info.bytes <= 0L) return false
-            encodeToAac(tmp, info, output)
+            encodeToAac(tmp, info, output, bitrate, onProgress)
+            onProgress(100)
             true
         } finally {
             tmp.delete()
@@ -51,7 +50,8 @@ object AudioTrimmer {
         input: Uri,
         startUs: Long,
         endUs: Long,
-        outFile: File
+        outFile: File,
+        onProgress: (Int) -> Unit
     ): PcmInfo? {
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
@@ -89,6 +89,7 @@ object AudioTrimmer {
 
             FileOutputStream(outFile).use { out ->
                 while (!outputDone) {
+                    if (Thread.currentThread().isInterrupted) throw InterruptedException("Cancelled")
                     if (!inputDone) {
                         val inIdx = d.dequeueInputBuffer(TIMEOUT_US)
                         if (inIdx >= 0) {
@@ -134,6 +135,7 @@ object AudioTrimmer {
                                     ob.get(chunk)
                                     out.write(chunk)
                                     written += chunk.size
+                                    onProgress((((bufStartUs - startUs).coerceAtLeast(0) * 50) / (endUs - startUs)).toInt().coerceIn(0, 50))
                                 }
                             }
                             d.releaseOutputBuffer(outIdx, false)
@@ -155,14 +157,14 @@ object AudioTrimmer {
         }
     }
 
-    private fun encodeToAac(pcm: File, info: PcmInfo, output: FileDescriptor) {
+    private fun encodeToAac(pcm: File, info: PcmInfo, output: FileDescriptor, bitrate: Int, onProgress: (Int) -> Unit) {
         val bpf = 2 * info.channels
 
         val format = MediaFormat.createAudioFormat(
             MediaFormat.MIMETYPE_AUDIO_AAC, info.sampleRate, info.channels
         ).apply {
             setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-            setInteger(MediaFormat.KEY_BIT_RATE, BITRATE)
+            setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
             setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384)
         }
 
@@ -183,6 +185,7 @@ object AudioTrimmer {
 
             FileInputStream(pcm).use { ins ->
                 while (!outputDone) {
+                    if (Thread.currentThread().isInterrupted) throw InterruptedException("Cancelled")
                     if (!inputDone) {
                         val inIdx = encoder.dequeueInputBuffer(TIMEOUT_US)
                         if (inIdx >= 0) {
@@ -200,6 +203,7 @@ object AudioTrimmer {
                                 buf.put(chunk, 0, n)
                                 encoder.queueInputBuffer(inIdx, 0, n, ptsUs, 0)
                                 fedBytes += n
+                                onProgress(50 + (fedBytes * 49 / info.bytes).toInt().coerceIn(0, 49))
                             }
                         }
                     }
@@ -243,7 +247,7 @@ object AudioTrimmer {
         }
     }
 
-    /** [maxBytes] dolana veya dosya bitene kadar okur; okunan bayt sayısını döner. */
+    
     private fun readFully(ins: InputStream, buffer: ByteArray, maxBytes: Int): Int {
         var total = 0
         while (total < maxBytes) {

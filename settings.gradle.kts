@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "muzik-kirp"
+rootProject.name = "music-cut"
 include(":app")

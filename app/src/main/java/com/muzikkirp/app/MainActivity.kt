@@ -1,5 +1,12 @@
 package com.muzikkirp.app
 
+import android.app.AlertDialog
+import android.content.ClipData
+import android.widget.EditText
+import android.widget.Spinner
+import android.widget.ArrayAdapter
+import android.widget.ProgressBar
+import android.view.View
 import android.app.Activity
 import android.content.ContentValues
 import android.content.Intent
@@ -24,8 +31,18 @@ class MainActivity : Activity() {
         const val MIN_GAP_MS = 500
     }
 
+    private var worker: Thread? = null
+    private var savedUri: Uri? = null
+    private lateinit var outputName: EditText
+    private lateinit var quality: Spinner
+    private lateinit var progressBar: ProgressBar
+    private lateinit var cancelButton: Button
+    private lateinit var shareButton: Button
+    private lateinit var openButton: Button
+    private lateinit var resetButton: Button
+    private lateinit var timeButton: Button
     private var sourceUri: Uri? = null
-    private var baseName = "muzik"
+    private var baseName = "audio"
     private var durationMs = 0
     private var player: MediaPlayer? = null
     private val handler = Handler(Looper.getMainLooper())
@@ -57,6 +74,13 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        findViewById<Button>(R.id.languageButton).setOnClickListener {
+            AlertDialog.Builder(this).setTitle("Language")
+                .setSingleChoiceItems(arrayOf("English"), 0) { dialog, _ ->
+                    getSharedPreferences("settings", MODE_PRIVATE).edit().putString("language", "en").apply()
+                    dialog.dismiss()
+                }.setNegativeButton("Close", null).show()
+        }
 
         pickButton = findViewById(R.id.pickButton)
         fileName = findViewById(R.id.fileName)
@@ -69,6 +93,41 @@ class MainActivity : Activity() {
         saveButton = findViewById(R.id.saveButton)
         statusText = findViewById(R.id.statusText)
 
+        outputName = findViewById(R.id.outputName)
+        quality = findViewById(R.id.quality)
+        progressBar = findViewById(R.id.progressBar)
+        cancelButton = findViewById(R.id.cancelButton)
+        shareButton = findViewById(R.id.shareButton)
+        openButton = findViewById(R.id.openButton)
+        resetButton = findViewById(R.id.resetButton)
+        timeButton = findViewById(R.id.timeButton)
+        quality.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
+            listOf("128 kbps · Small file", "192 kbps · Balanced", "256 kbps · High quality"))
+        quality.setSelection(1)
+        cancelButton.setOnClickListener { worker?.interrupt(); cancelButton.isEnabled = false }
+        shareButton.setOnClickListener { savedUri?.let { uri ->
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "audio/mp4"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = ClipData.newRawUri("Ses", uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(send, "Share audio"))
+        } }
+        openButton.setOnClickListener { savedUri?.let { uri ->
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "audio/mp4")
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+            } catch (_: android.content.ActivityNotFoundException) {
+                Toast.makeText(this, "No audio player found.", Toast.LENGTH_LONG).show()
+            }
+        } }
+        resetButton.setOnClickListener {
+            stopPreview()
+            startSeek.progress = 0
+            endSeek.progress = durationMs
+        }
+        timeButton.setOnClickListener { editTimes() }
         pickButton.setOnClickListener { pickFile() }
         previewButton.setOnClickListener { togglePreview() }
         saveButton.setOnClickListener { saveTrimmed() }
@@ -124,6 +183,8 @@ class MainActivity : Activity() {
 
     private fun loadFile(uri: Uri) {
         releasePlayer()
+        sourceUri = null
+        setBusy(false)
         statusText.text = ""
 
         val mp = MediaPlayer()
@@ -141,9 +202,10 @@ class MainActivity : Activity() {
         sourceUri = uri
         durationMs = mp.duration
 
-        val name = queryName(uri) ?: "muzik"
-        baseName = name.substringBeforeLast('.').ifBlank { "muzik" }
+        val name = queryName(uri) ?: "audio"
+        baseName = name.substringBeforeLast('.').ifBlank { "audio" }
         fileName.text = name
+        outputName.setText("${baseName}_trimmed")
 
         startSeek.max = durationMs
         endSeek.max = durationMs
@@ -154,7 +216,42 @@ class MainActivity : Activity() {
         previewButton.isEnabled = true
         saveButton.isEnabled = true
         previewButton.setText(R.string.preview)
+        setBusy(false)
         updateLabels()
+    }
+
+    private fun editTimes() {
+        val fields = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(32, 16, 32, 8)
+        }
+        fun field(label: String, ms: Int) = EditText(this).apply {
+            hint = label
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(String.format(Locale.US, "%.3f", ms / 1000.0))
+            fields.addView(this)
+        }
+        val start = field("Start (seconds)", startSeek.progress)
+        val end = field("End (seconds)", endSeek.progress)
+        val dialog = AlertDialog.Builder(this).setTitle("Exact times · seconds")
+            .setView(fields).setNegativeButton("Cancel", null)
+            .setPositiveButton("Apply", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val s = start.text.toString().replace(',', '.').toDoubleOrNull()
+                val e = end.text.toString().replace(',', '.').toDoubleOrNull()
+                if (s == null || e == null || !s.isFinite() || !e.isFinite() ||
+                    s < 0 || e * 1000 > durationMs || (e - s) * 1000 < MIN_GAP_MS) {
+                    end.error = "Enter a valid range of at least 0.5 seconds."
+                } else {
+                    stopPreview()
+                    startSeek.progress = (s * 1000).toInt()
+                    endSeek.progress = (e * 1000).toInt()
+                    dialog.dismiss()
+                }
+            }
+        }
+        dialog.show()
     }
 
     private fun queryName(uri: Uri): String? {
@@ -186,16 +283,22 @@ class MainActivity : Activity() {
         if (p.isPlaying) {
             stopPreview()
         } else {
-            p.seekTo(startSeek.progress)
-            p.start()
-            previewButton.setText(R.string.stop)
-            handler.post(stopChecker)
+            p.setOnSeekCompleteListener { ready ->
+                ready.setOnSeekCompleteListener(null)
+                if (!isDestroyed && hasWindowFocus()) {
+                    ready.start()
+                    previewButton.setText(R.string.stop)
+                    handler.post(stopChecker)
+                }
+            }
+            p.seekTo(startSeek.progress.toLong(), MediaPlayer.SEEK_CLOSEST)
         }
     }
 
     private fun stopPreview() {
         handler.removeCallbacks(stopChecker)
         val p = player ?: return
+        p.setOnSeekCompleteListener(null)
         if (p.isPlaying) p.pause()
         previewButton.setText(R.string.preview)
     }
@@ -213,56 +316,89 @@ class MainActivity : Activity() {
         setBusy(true)
         statusText.setText(R.string.processing)
 
-        Thread {
-            val ok = try {
-                writeTrimmed(src, startMs, endMs)
-            } catch (e: Exception) {
-                false
+        val name = outputName.text.toString().trim().removeSuffix(".m4a")
+            .replace(Regex("[/\\\\\\p{Cntrl}]"), "_").take(100).ifBlank { "audio_trimmed" }
+        val bitrate = intArrayOf(128_000, 192_000, 256_000)[quality.selectedItemPosition]
+        savedUri = null
+        shareButton.isEnabled = false
+        openButton.isEnabled = false
+        progressBar.progress = 0
+        worker = Thread {
+            var result: Uri? = null
+            var message = "Could not save audio. Check the source file and available storage."
+            try {
+                result = writeTrimmed(src, startMs, endMs, name, bitrate)
+                message = "Saved to Music/MusicCut"
+            } catch (_: InterruptedException) {
+                message = "Cancelled."
+            } catch (_: Exception) {
+                // The pending output is removed by writeTrimmed.
             }
+            val finalUri = result
+            val finalMessage = message
             runOnUiThread {
-                setBusy(false)
-                statusText.setText(if (ok) R.string.saved else R.string.error_trim)
+                if (!isDestroyed) {
+                    worker = null
+                    savedUri = finalUri
+                    setBusy(false)
+                    shareButton.isEnabled = finalUri != null
+                    openButton.isEnabled = finalUri != null
+                    statusText.text = finalMessage
+                }
             }
-        }.start()
+        }.also { it.start() }
     }
 
-    private fun writeTrimmed(src: Uri, startMs: Int, endMs: Int): Boolean {
+    private fun writeTrimmed(src: Uri, startMs: Int, endMs: Int, name: String, bitrate: Int): Uri {
         val values = ContentValues().apply {
-            put(MediaStore.Audio.Media.DISPLAY_NAME, "${baseName}_kirpildi.m4a")
+            put(MediaStore.Audio.Media.DISPLAY_NAME, "$name.m4a")
             put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4")
-            put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/MuzikKirp")
+            put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/MusicCut")
             put(MediaStore.Audio.Media.IS_PENDING, 1)
         }
         val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-        val outUri = contentResolver.insert(collection, values) ?: return false
-
-        var ok = false
+        val outUri = contentResolver.insert(collection, values) ?: error("Cannot create output")
+        var published = false
         try {
             contentResolver.openFileDescriptor(outUri, "rw")?.use { pfd ->
-                ok = AudioTrimmer.trim(
-                    this, src, startMs * 1000L, endMs * 1000L, pfd.fileDescriptor
-                )
-            }
-        } catch (e: Exception) {
-            ok = false
-        }
-
-        if (ok) {
+                var lastPercent = -1
+                check(AudioTrimmer.trim(applicationContext, src, startMs * 1000L,
+                    endMs * 1000L, pfd.fileDescriptor, bitrate) { percent ->
+                    if (percent != lastPercent) {
+                      lastPercent = percent
+                      runOnUiThread {
+                        if (!isDestroyed) {
+                            progressBar.progress = percent
+                            statusText.text = "Processing · %$percent"
+                        }
+                      }
+                    }
+                })
+            } ?: error("Cannot open output")
+            if (Thread.currentThread().isInterrupted) throw InterruptedException()
             val done = ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }
-            contentResolver.update(outUri, done, null, null)
-        } else {
-            contentResolver.delete(outUri, null, null)
+            check(contentResolver.update(outUri, done, null, null) > 0)
+            published = true
+            return outUri
+        } finally {
+            if (!published) contentResolver.delete(outUri, null, null)
         }
-        return ok
     }
 
     private fun setBusy(busy: Boolean) {
-        val enabled = !busy && sourceUri != null
+        val enabled = !busy && sourceUri != null && player != null
         pickButton.isEnabled = !busy
         previewButton.isEnabled = enabled
         saveButton.isEnabled = enabled
         startSeek.isEnabled = enabled
         endSeek.isEnabled = enabled
+        timeButton.isEnabled = enabled
+        resetButton.isEnabled = enabled
+        outputName.isEnabled = !busy
+        quality.isEnabled = !busy
+        cancelButton.visibility = if (busy) View.VISIBLE else View.GONE
+        cancelButton.isEnabled = busy
+        progressBar.visibility = if (busy) View.VISIBLE else View.GONE
     }
 
     private fun releasePlayer() {
@@ -277,6 +413,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        worker?.interrupt()
         releasePlayer()
         super.onDestroy()
     }
