@@ -1,48 +1,56 @@
-# Müzik Kırp
+# Music Cut
 
-Android için **ücretsiz, reklamsız ve çevrimdışı** müzik kırpma/kesme aracı.
+A **free, ad-free, and offline** music trimming/cutting app for Android.
 
-- Şarkı seç, başlangıç ve bitiş noktasını kaydırıcılarla ayarla
-- Kırpmadan önce seçili aralığı dinle (önizleme)
-- Sonucu `Müzik/MuzikKirp` klasörüne `.m4a` (AAC) olarak kaydet
-- İnternet izni yok, reklam yok, izleme yok, dış kütüphane yok
+- Pick a song, then set the start and end points with the sliders
+- Preview the selected range before trimming
+- Save the result as `.m4a` (AAC) in the `Music/MuzikKirp` folder
+- No internet permission, no ads, no tracking, no external libraries
 
-Her ses formatını (mp3, m4a, wav, ogg, flac…) Android'in kendi codec'leri çözebildiği sürece destekler.
+It supports any audio format (mp3, m4a, wav, ogg, flac…) that Android's built-in codecs can decode.
 
-## Kurulum (APK)
+## Installation (APK)
 
-1. Bu reponun **Actions** sekmesinde en son başarılı "APK derle" çalışmasını aç.
-2. En alttaki **Artifacts** bölümünden `muzik-kirp-apk` dosyasını indir ve zip'ten çıkar.
-3. `app-debug.apk` dosyasını telefona gönder ve aç. "Bilinmeyen kaynaklardan yükleme" izni istenirse onay ver.
+**Option 1: Releases (recommended)**
 
-Gereksinim: Android 10 (API 29) veya üstü.
+1. Go to the **Releases** section of this repository.
+2. Download `app-debug.apk` from the latest release.
+3. Open the file on your phone. If asked, allow installing from unknown sources.
 
-## Kendin derlemek istersen
+**Option 2: Latest build from Actions**
 
-JDK 17 ve Android SDK kurulu olmalı:
+1. Open the latest successful "APK creator" run in the **Actions** tab.
+2. Download `music-cut-apk` from the **Artifacts** section at the bottom and unzip it.
+3. Send `app-debug.apk` to your phone and open it. If asked, allow installing from unknown sources.
+
+Requirement: Android 10 (API 29) or higher.
+
+## Build it yourself
+
+You need JDK 17 and the Android SDK installed:
 
 ```bash
 gradle assembleDebug
 ```
 
-APK `app/build/outputs/apk/debug/app-debug.apk` konumunda oluşur.
+The APK will be created at `app/build/outputs/apk/debug/app-debug.apk`.
 
-## Nasıl çalışır?
+## How it works
 
-Seçilen aralık Android'in `MediaCodec` ile çözülür, geçici PCM dosyasına yazılır, sonra AAC olarak kodlanıp `MediaMuxer` ile `.m4a` dosyasına yazılır. Kırpma sırasında bir kez yeniden kodlama yapıldığı için çok küçük bir kalite kaybı olabilir (192 kbps AAC).
+The selected range is decoded with Android's `MediaCodec` into a temporary PCM file, then encoded to AAC and written to an `.m4a` file using `MediaMuxer`. Because the audio is re-encoded once during trimming, there may be a very small quality loss (192 kbps AAC).
 
-## Yapılacaklar
+## To do
 
-- [ ] Kayıpsız kırpma (AAC/M4A girdiler için yeniden kodlamadan)
-- [ ] Çıktı biçimi seçimi
+- [ ] Lossless trimming (skip re-encoding for AAC/M4A input)
+- [ ] Output format selection
 - [ ] Fade in / fade out
-- [ ] Uygulama simgesi
-- [ ] Dalga formu gösterimi
+- [ ] App icon
+- [ ] Waveform display
 
-## Katkı
+## Contributing
 
-Hata bildirimleri ve pull request'ler açıktır. Büyük değişikliklerden önce bir issue açman iyi olur.
+Bug reports and pull requests are welcome. For larger changes, it's a good idea to open an issue first.
 
-## Lisans
+## License
 
 [MIT](LICENSE)
