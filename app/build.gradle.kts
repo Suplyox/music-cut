@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.muzikkirp.app"
-        // Android 10+ : kaydetme için ek depolama izni gerekmez (MediaStore kullanılır)
+
         minSdk = 29
         targetSdk = 34
         versionCode = 2
@@ -32,6 +32,6 @@ android {
     }
 }
 
-// Bilerek hiçbir dış kütüphane yok: reklam, izleme veya internet erişimi içermez.
+
 dependencies {
 }

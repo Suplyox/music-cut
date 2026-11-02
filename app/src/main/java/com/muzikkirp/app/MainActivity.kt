@@ -42,7 +42,7 @@ class MainActivity : Activity() {
     private lateinit var resetButton: Button
     private lateinit var timeButton: Button
     private var sourceUri: Uri? = null
-    private var baseName = "muzik"
+    private var baseName = "audio"
     private var durationMs = 0
     private var player: MediaPlayer? = null
     private val handler = Handler(Looper.getMainLooper())
@@ -74,6 +74,13 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        findViewById<Button>(R.id.languageButton).setOnClickListener {
+            AlertDialog.Builder(this).setTitle("Language")
+                .setSingleChoiceItems(arrayOf("English"), 0) { dialog, _ ->
+                    getSharedPreferences("settings", MODE_PRIVATE).edit().putString("language", "en").apply()
+                    dialog.dismiss()
+                }.setNegativeButton("Close", null).show()
+        }
 
         pickButton = findViewById(R.id.pickButton)
         fileName = findViewById(R.id.fileName)
@@ -95,7 +102,7 @@ class MainActivity : Activity() {
         resetButton = findViewById(R.id.resetButton)
         timeButton = findViewById(R.id.timeButton)
         quality.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
-            listOf("128 kbps · Küçük dosya", "192 kbps · Dengeli", "256 kbps · Yüksek kalite"))
+            listOf("128 kbps · Small file", "192 kbps · Balanced", "256 kbps · High quality"))
         quality.setSelection(1)
         cancelButton.setOnClickListener { worker?.interrupt(); cancelButton.isEnabled = false }
         shareButton.setOnClickListener { savedUri?.let { uri ->
@@ -105,14 +112,14 @@ class MainActivity : Activity() {
                 clipData = ClipData.newRawUri("Ses", uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            startActivity(Intent.createChooser(send, "Kaydı paylaş"))
+            startActivity(Intent.createChooser(send, "Share audio"))
         } }
         openButton.setOnClickListener { savedUri?.let { uri ->
             try {
                 startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "audio/mp4")
                     .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
             } catch (_: android.content.ActivityNotFoundException) {
-                Toast.makeText(this, "Ses oynatıcı bulunamadı.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "No audio player found.", Toast.LENGTH_LONG).show()
             }
         } }
         resetButton.setOnClickListener {
@@ -195,10 +202,10 @@ class MainActivity : Activity() {
         sourceUri = uri
         durationMs = mp.duration
 
-        val name = queryName(uri) ?: "muzik"
-        baseName = name.substringBeforeLast('.').ifBlank { "muzik" }
+        val name = queryName(uri) ?: "audio"
+        baseName = name.substringBeforeLast('.').ifBlank { "audio" }
         fileName.text = name
-        outputName.setText("${baseName}_kirpildi")
+        outputName.setText("${baseName}_trimmed")
 
         startSeek.max = durationMs
         endSeek.max = durationMs
@@ -224,18 +231,18 @@ class MainActivity : Activity() {
             setText(String.format(Locale.US, "%.3f", ms / 1000.0))
             fields.addView(this)
         }
-        val start = field("Başlangıç (saniye)", startSeek.progress)
-        val end = field("Bitiş (saniye)", endSeek.progress)
-        val dialog = AlertDialog.Builder(this).setTitle("Hassas zaman · saniye")
-            .setView(fields).setNegativeButton("Vazgeç", null)
-            .setPositiveButton("Uygula", null).create()
+        val start = field("Start (seconds)", startSeek.progress)
+        val end = field("End (seconds)", endSeek.progress)
+        val dialog = AlertDialog.Builder(this).setTitle("Exact times · seconds")
+            .setView(fields).setNegativeButton("Cancel", null)
+            .setPositiveButton("Apply", null).create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val s = start.text.toString().replace(',', '.').toDoubleOrNull()
                 val e = end.text.toString().replace(',', '.').toDoubleOrNull()
                 if (s == null || e == null || !s.isFinite() || !e.isFinite() ||
                     s < 0 || e * 1000 > durationMs || (e - s) * 1000 < MIN_GAP_MS) {
-                    end.error = "En az 0,5 saniyelik geçerli bir aralık gir."
+                    end.error = "Enter a valid range of at least 0.5 seconds."
                 } else {
                     stopPreview()
                     startSeek.progress = (s * 1000).toInt()
@@ -310,7 +317,7 @@ class MainActivity : Activity() {
         statusText.setText(R.string.processing)
 
         val name = outputName.text.toString().trim().removeSuffix(".m4a")
-            .replace(Regex("[/\\\\\\p{Cntrl}]"), "_").take(100).ifBlank { "muzik_kirpildi" }
+            .replace(Regex("[/\\\\\\p{Cntrl}]"), "_").take(100).ifBlank { "audio_trimmed" }
         val bitrate = intArrayOf(128_000, 192_000, 256_000)[quality.selectedItemPosition]
         savedUri = null
         shareButton.isEnabled = false
@@ -318,12 +325,12 @@ class MainActivity : Activity() {
         progressBar.progress = 0
         worker = Thread {
             var result: Uri? = null
-            var message = "Kayıt oluşturulamadı. Dosyayı ve boş depolama alanını kontrol et."
+            var message = "Could not save audio. Check the source file and available storage."
             try {
                 result = writeTrimmed(src, startMs, endMs, name, bitrate)
-                message = "Kaydedildi · Music/MuzikKirp"
+                message = "Saved to Music/MusicCut"
             } catch (_: InterruptedException) {
-                message = "İşlem iptal edildi."
+                message = "Cancelled."
             } catch (_: Exception) {
                 // The pending output is removed by writeTrimmed.
             }
@@ -346,7 +353,7 @@ class MainActivity : Activity() {
         val values = ContentValues().apply {
             put(MediaStore.Audio.Media.DISPLAY_NAME, "$name.m4a")
             put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4")
-            put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/MuzikKirp")
+            put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/MusicCut")
             put(MediaStore.Audio.Media.IS_PENDING, 1)
         }
         val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
@@ -362,7 +369,7 @@ class MainActivity : Activity() {
                       runOnUiThread {
                         if (!isDestroyed) {
                             progressBar.progress = percent
-                            statusText.text = "İşleniyor · %$percent"
+                            statusText.text = "Processing · %$percent"
                         }
                       }
                     }

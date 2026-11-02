@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Müzik Kırp</string>
-    <string name="pick_file">Şarkı seç</string>
-    <string name="no_file">Henüz dosya seçilmedi</string>
-    <string name="start_label">Başlangıç: %s</string>
-    <string name="end_label">Bitiş: %s</string>
-    <string name="length_label">Seçilen uzunluk: %s</string>
-    <string name="preview">▶ Önizle</string>
-    <string name="stop">⏸ Durdur</string>
-    <string name="save">Kırp ve kaydet</string>
-    <string name="processing">İşleniyor, lütfen bekleyin…</string>
-    <string name="saved">Kaydedildi: Müzik/MuzikKirp klasörü</string>
-    <string name="error_open">Dosya açılamadı</string>
-    <string name="error_trim">Kırpma başarısız oldu</string>
-    <string name="error_range">Bitiş, başlangıçtan en az yarım saniye sonra olmalı</string>
-    <string name="hint">Ücretsiz, reklamsız ve çevrimdışı. Kırpılan dosya .m4a olarak kaydedilir.</string>
+    <string name="app_name">Music Cut</string>
+    <string name="pick_file">Choose audio</string>
+    <string name="no_file">No audio selected</string>
+    <string name="start_label">Start: %s</string>
+    <string name="end_label">End: %s</string>
+    <string name="length_label">Selection: %s</string>
+    <string name="preview">▶ Preview</string>
+    <string name="stop">⏸ Stop</string>
+    <string name="save">Trim and save</string>
+    <string name="processing">Processing…</string>
+    <string name="saved">Saved to Music/MusicCut</string>
+    <string name="error_open">Could not open audio</string>
+    <string name="error_trim">Could not trim audio</string>
+    <string name="error_range">Select at least half a second of audio</string>
+    <string name="hint">Free and offline. Trimmed audio is saved as .m4a.</string>
 </resources>

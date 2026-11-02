@@ -4,7 +4,7 @@ A **free, ad-free, and offline** music trimming/cutting app for Android.
 
 - Pick a song, then set the start and end points with the sliders
 - Preview the selected range before trimming
-- Save the result as `.m4a` (AAC) in the `Music/MuzikKirp` folder
+- Save the result as `.m4a` (AAC) in the `Music/MusicCut` folder
 - No internet permission, no ads, no tracking, no external libraries
 
 It supports any audio format (mp3, m4a, wav, ogg, flac…) that Android's built-in codecs can decode.

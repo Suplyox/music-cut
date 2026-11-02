@@ -13,13 +13,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
 
-/**
- * Herhangi bir ses dosyasının [startUs, endUs) aralığını kırpıp AAC (.m4a) olarak yazar.
- *
- * Yöntem iki aşamalıdır ve yalnızca Android'in yerleşik codec'lerini kullanır:
- *  1) Seçilen aralık çözülür (decode) ve geçici bir PCM dosyasına yazılır.
- *  2) PCM, AAC olarak kodlanıp MP4/M4A kapsayıcısına yazılır.
- */
+
 object AudioTrimmer {
 
     private const val TIMEOUT_US = 10_000L
@@ -27,7 +21,7 @@ object AudioTrimmer {
 
     private class PcmInfo(val sampleRate: Int, val channels: Int, val bytes: Long)
 
-    /** Başarılıysa true döner. [output] yazılabilir ve aranabilir (seekable) bir dosya tanıtıcısı olmalıdır. */
+    
     fun trim(
         context: Context,
         input: Uri,
@@ -253,7 +247,7 @@ object AudioTrimmer {
         }
     }
 
-    /** [maxBytes] dolana veya dosya bitene kadar okur; okunan bayt sayısını döner. */
+    
     private fun readFully(ins: InputStream, buffer: ByteArray, maxBytes: Int): Int {
         var total = 0
         while (total < maxBytes) {
